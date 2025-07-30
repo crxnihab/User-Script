@@ -1,125 +1,65 @@
 // ==UserScript==
-
-
-2
-// @name         Copy All Page Links
-
-
-3
-// @namespace    http://your.namespace
-
-
-4
+// @name         Convert Plain URLs to Clickable Links
+// @namespace    ViolentmonkeyCustom
 // @version      1.0
-
-
-5
-// @description  Copy all <a href> links from the current page silently via menu
-
-
-6
-// @author       Cr'x Nihab
-
-
-7
+// @description  Make plain text URLs clickable so Firefox shows "Open in new tab"
 // @match        *://*/*
-
-
-8
-// @grant        GM_registerMenuCommand
-
-
-9
-// @grant        GM_setClipboard
-
-
-10
+// @grant        none
 // ==/UserScript==
 
+(function () {
+  'use strict';
 
-11
-​
+  function linkifyTextNodes(rootNode) {
+    const urlRegex = /https?:\/\/[^\s"<>()]+/g;
 
-
-12
-
-
-(function() {
-
-
-13
-    'use strict';
-
-
-14
-​
-
-
-15
-
-
-    function copyAllLinks() {
-
-
-16
-        const links = Array.from(document.querySelectorAll('a[href]'))
-
-
-17
-            .map(a => a.href)
-
-
-18
-            .filter(href => href && href.startsWith('http'))
-
-
-19
-            .join('\n');
-
-
-20
-​
-
-
-21
-
-
-        if (links) {
-
-
-22
-            GM_setClipboard(links, 'text');
-
-
-23
-            console.log(`[Copy All Links] Copied ${links.split('\n').length} links.`);
-
-
-24
-
-
-        } else {
-
-
-25
-            console.log('[Copy All Links] No links found.');
-
-
-26
+    const treeWalker = document.createTreeWalker(
+      rootNode,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function (node) {
+          return node.parentNode && node.parentNode.nodeName !== 'A' && urlRegex.test(node.nodeValue)
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT;
         }
+      },
+      false
+    );
 
-
-27
+    const nodes = [];
+    while (treeWalker.nextNode()) {
+      nodes.push(treeWalker.currentNode);
     }
 
+    nodes.forEach(textNode => {
+      const parent = textNode.parentNode;
+      const frag = document.createDocumentFragment();
 
-28
-​
+      const parts = textNode.nodeValue.split(urlRegex);
+      const matches = textNode.nodeValue.match(urlRegex);
 
+      parts.forEach((part, i) => {
+        frag.appendChild(document.createTextNode(part));
+        if (matches && matches[i]) {
+          const a = document.createElement('a');
+          a.href = matches[i];
+          a.textContent = matches[i];
+          a.style.wordBreak = "break-word";
+          a.target = "_blank";
+          frag.appendChild(a);
+        }
+      });
 
-29
-    GM_registerMenuCommand("📋 Copy All Links", copyAllLinks);
+      parent.replaceChild(frag, textNode);
+    });
+  }
 
+  function run() {
+    linkifyTextNodes(document.body);
+  }
 
-30
+  run();
+
+  // Observe dynamically loaded content
+  new MutationObserver(() => run()).observe(document.body, { childList: true, subtree: true });
 })();
